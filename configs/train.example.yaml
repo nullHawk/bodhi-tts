@@ -24,6 +24,7 @@ checkpointing:
   output_dir: /workspace/checkpoints/bodhi-tts
   persist_dir: /workspace/persist/bodhi-tts
   gcs_bucket: null
+  hf_repo: null
 
 logging:
   log_every: 10

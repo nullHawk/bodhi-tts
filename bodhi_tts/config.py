@@ -92,6 +92,7 @@ class CheckpointConfig:
     output_dir: str = "/workspace/checkpoints/bodhi-tts"
     persist_dir: str = "/workspace/persist/bodhi-tts"
     gcs_bucket: Optional[str] = None
+    hf_repo: Optional[str] = None
 
 
 @dataclass

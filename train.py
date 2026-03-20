@@ -17,7 +17,8 @@ from bodhi_tts.model.bodhi import BodhiTTS
 from bodhi_tts.flow.ot_cfm import sample_and_compute_loss
 from bodhi_tts.utils import (
     create_wsd_scheduler, get_wsd_phase, should_save_checkpoint,
-    setup_preemption_handler, upload_checkpoint_to_gcs, generate_eval_audio,
+    setup_preemption_handler, upload_checkpoint_to_gcs,
+    upload_checkpoint_to_hf, generate_eval_audio,
 )
 
 
@@ -265,6 +266,9 @@ def main():
                             ckpt_dir, cc.gcs_bucket,
                             lc.wandb_run_name or "bodhi-tts", global_step
                         )
+
+                        # HF upload
+                        upload_checkpoint_to_hf(ckpt_dir, cc.hf_repo, global_step, pct)
 
                         # Validation
                         unwrapped = accelerator.unwrap_model(model)

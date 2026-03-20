@@ -84,6 +84,25 @@ def upload_checkpoint_to_gcs(checkpoint_dir, gcs_bucket, run_name, step):
         print(f"GCS upload failed: {e}")
 
 
+def upload_checkpoint_to_hf(checkpoint_dir, hf_repo, step, pct):
+    """Upload checkpoint to HuggingFace Hub."""
+    if not hf_repo:
+        return
+    try:
+        from huggingface_hub import HfApi
+        api = HfApi()
+        api.create_repo(hf_repo, exist_ok=True, private=True)
+        api.upload_folder(
+            folder_path=str(checkpoint_dir),
+            repo_id=hf_repo,
+            path_in_repo=f"checkpoint-{step}-{pct}pct",
+            commit_message=f"Checkpoint at {pct}% (step {step})",
+        )
+        print(f"Uploaded checkpoint to HF: {hf_repo}/checkpoint-{step}-{pct}pct")
+    except Exception as e:
+        print(f"HF upload failed: {e}")
+
+
 def generate_eval_audio(model, tokenizer, config, step, accelerator, eval_prompts, desc_model=None):
     """Generate evaluation audio with Griffin-Lim and log to W&B.
 
