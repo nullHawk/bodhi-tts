@@ -6,6 +6,7 @@ import time
 import torch
 from pathlib import Path
 from dotenv import load_dotenv
+from tqdm import tqdm
 
 from accelerate import Accelerator, DistributedDataParallelKwargs
 from accelerate.utils import set_seed
@@ -191,6 +192,9 @@ def main():
     dur_loss_weight = train_cfg.flow.dur_loss_weight
     step_times = []
 
+    pbar = tqdm(total=total_steps, initial=global_step, desc="Training",
+                 disable=not is_main, unit="step")
+
     for epoch in range(start_epoch, tc.epochs):
         model.train()
         if hasattr(train_loader, "sampler") and hasattr(train_loader.sampler, "set_epoch"):
@@ -208,6 +212,7 @@ def main():
                 if accelerator.sync_gradients:
                     grad_norm = accelerator.clip_grad_norm_(model.parameters(), tc.max_grad_norm)
                     global_step += 1
+                    pbar.update(1)
 
                 optimizer.step()
                 scheduler.step()
@@ -238,10 +243,14 @@ def main():
                 }
                 accelerator.log(log_dict, step=global_step)
 
-                print(f"[{global_step}/{total_steps} ({progress_pct:.1f}%)] "
-                      f"loss={total_loss.item():.4f} flow={flow_loss.item():.4f} "
-                      f"dur={dur_loss.item():.4f} lr={scheduler.get_last_lr()[0]:.2e} "
-                      f"phase={phase} {1/avg_step_time:.1f} steps/s")
+                pbar.set_postfix({
+                    "loss": f"{total_loss.item():.3f}",
+                    "flow": f"{flow_loss.item():.3f}",
+                    "dur": f"{dur_loss.item():.3f}",
+                    "lr": f"{scheduler.get_last_lr()[0]:.1e}",
+                    "phase": phase,
+                    "epoch": f"{epoch+1}/{tc.epochs}",
+                })
 
             # Audio eval
             if accelerator.sync_gradients and is_main and global_step % lc.eval_every == 0 and global_step > 0:
@@ -303,6 +312,8 @@ def main():
 
         if is_main:
             print(f"\n--- Epoch {epoch + 1}/{tc.epochs} complete ---\n")
+
+    pbar.close()
 
     # Final save
     if is_main:

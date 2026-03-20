@@ -71,20 +71,17 @@ def main():
     mel_out = mel[0, :, :mel_lengths[0]].cpu()  # [80, T]
     print(f"Generated mel: {mel_out.shape}")
 
-    # Griffin-Lim vocoder
+    # Griffin-Lim vocoder via pseudo-inverse of mel filterbank
     mel_spec = torch.exp(mel_out)  # undo log
-    inv_basis = torchaudio.functional.inverse_mel_scale(
-        n_stft=model_cfg.mel.n_fft // 2 + 1,
-        n_mels=model_cfg.mel.n_mels,
-        sample_rate=model_cfg.mel.sr,
-        f_min=model_cfg.mel.f_min,
-        f_max=model_cfg.mel.f_max,
+    n_stft = model_cfg.mel.n_fft // 2 + 1
+    mel_fb = torchaudio.functional.melscale_fbanks(
+        n_freqs=n_stft, f_min=model_cfg.mel.f_min, f_max=model_cfg.mel.f_max,
+        n_mels=model_cfg.mel.n_mels, sample_rate=model_cfg.mel.sr,
     )
-    linear_spec = torch.matmul(inv_basis, mel_spec)
+    inv_fb = torch.linalg.pinv(mel_fb.T)
+    linear_spec = torch.matmul(inv_fb, mel_spec).clamp(min=0)
     griffin_lim = torchaudio.transforms.GriffinLim(
-        n_fft=model_cfg.mel.n_fft,
-        hop_length=model_cfg.mel.hop_length,
-        power=1.0,
+        n_fft=model_cfg.mel.n_fft, hop_length=model_cfg.mel.hop_length, power=1.0,
     )
     waveform = griffin_lim(linear_spec)
 

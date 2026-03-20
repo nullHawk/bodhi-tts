@@ -139,23 +139,18 @@ def generate_eval_audio(model, tokenizer, config, step, accelerator, eval_prompt
         mel, mel_lens = model.synthesize(text_ids, text_lengths, desc_embed)
         mel_out = mel[0, :, :mel_lens[0]].cpu()  # [80, T]
 
-        # Griffin-Lim
+        # Griffin-Lim via pseudo-inverse of mel filterbank
         mel_spec = torch.exp(mel_out)  # undo log
+        n_stft = config.mel.n_fft // 2 + 1
+        mel_fb = torchaudio.functional.melscale_fbanks(
+            n_freqs=n_stft, f_min=config.mel.f_min, f_max=config.mel.f_max,
+            n_mels=config.mel.n_mels, sample_rate=config.mel.sr,
+        )  # [n_stft, n_mels]
+        inv_fb = torch.linalg.pinv(mel_fb.T)  # [n_stft, n_mels]
+        linear_spec = torch.matmul(inv_fb, mel_spec).clamp(min=0)  # [n_stft, T]
         griffin_lim = torchaudio.transforms.GriffinLim(
-            n_fft=config.mel.n_fft,
-            hop_length=config.mel.hop_length,
-            power=1.0,
+            n_fft=config.mel.n_fft, hop_length=config.mel.hop_length, power=1.0,
         )
-        # Need to go from mel to linear spec for Griffin-Lim
-        # Use inverse mel filterbank approximation
-        inv_basis = torchaudio.functional.inverse_mel_scale(
-            n_stft=config.mel.n_fft // 2 + 1,
-            n_mels=config.mel.n_mels,
-            sample_rate=config.mel.sr,
-            f_min=config.mel.f_min,
-            f_max=config.mel.f_max,
-        )
-        linear_spec = torch.matmul(inv_basis, mel_spec)
         waveform = griffin_lim(linear_spec)
 
         try:
