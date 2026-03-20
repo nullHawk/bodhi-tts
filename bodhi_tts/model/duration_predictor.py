@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+from numba import njit, prange
 
 
 class DurationPredictor(nn.Module):
@@ -47,8 +48,53 @@ class DurationPredictor(nn.Module):
         return log_dur
 
 
+@njit()
+def _mas_one(log_p, t_len, m_len):
+    """MAS DP for a single sample — numba JIT compiled."""
+    Q = np.full((t_len, m_len), -1e9, dtype=np.float64)
+    Q[0, 0] = log_p[0, 0]
+    for j in range(1, m_len):
+        Q[0, j] = Q[0, j - 1] + log_p[0, j]
+
+    for i in range(1, t_len):
+        for j in range(i, m_len):
+            prev = Q[i - 1, j - 1]
+            curr = Q[i, j - 1]
+            Q[i, j] = log_p[i, j] + (prev if prev > curr else curr)
+
+    # Backtrack
+    path = np.zeros(m_len, dtype=np.int64)
+    path[m_len - 1] = t_len - 1
+    for j in range(m_len - 2, -1, -1):
+        i = path[j + 1]
+        if i > 0 and Q[i - 1, j] > Q[i, j]:
+            path[j] = i - 1
+        else:
+            path[j] = i
+
+    # Convert path to durations
+    durations = np.zeros(t_len, dtype=np.int64)
+    for j in range(m_len):
+        durations[path[j]] += 1
+    return durations
+
+
+@njit(parallel=True)
+def _mas_batch(attn_np, t_lens, m_lens, out_durations):
+    """Batch MAS with parallel processing via numba."""
+    B = attn_np.shape[0]
+    for b in prange(B):
+        t_len = t_lens[b]
+        m_len = m_lens[b]
+        log_p = attn_np[b, :t_len, :m_len]
+        durs = _mas_one(log_p, t_len, m_len)
+        out_durations[b, :t_len] = durs
+
+
 def monotonic_alignment_search(attn_logits, text_lengths, mel_lengths):
     """MAS from Glow-TTS: find monotonic alignment via dynamic programming.
+
+    Uses numba JIT with parallel batch processing for speed.
 
     Args:
         attn_logits: [B, T_text, T_mel] log-probability of alignment
@@ -58,43 +104,16 @@ def monotonic_alignment_search(attn_logits, text_lengths, mel_lengths):
         durations: [B, T_text] integer durations
     """
     B = attn_logits.shape[0]
-    durations = torch.zeros(B, attn_logits.shape[1], dtype=torch.long, device=attn_logits.device)
+    T_text = attn_logits.shape[1]
 
-    # Run on CPU with numpy for DP
-    attn_np = attn_logits.detach().cpu().numpy()
-    t_lens = text_lengths.cpu().numpy()
-    m_lens = mel_lengths.cpu().numpy()
+    attn_np = attn_logits.detach().cpu().to(torch.float64).numpy()
+    t_lens = text_lengths.cpu().numpy().astype(np.int64)
+    m_lens = mel_lengths.cpu().numpy().astype(np.int64)
 
-    for b in range(B):
-        t_len = int(t_lens[b])
-        m_len = int(m_lens[b])
-        log_p = attn_np[b, :t_len, :m_len]  # [T_text, T_mel]
+    out_durations = np.zeros((B, T_text), dtype=np.int64)
+    _mas_batch(attn_np, t_lens, m_lens, out_durations)
 
-        # DP forward
-        Q = np.full((t_len, m_len), -np.inf, dtype=np.float64)
-        Q[0, 0] = log_p[0, 0]
-        for j in range(1, m_len):
-            Q[0, j] = Q[0, j - 1] + log_p[0, j]
-
-        for i in range(1, t_len):
-            for j in range(i, m_len):
-                Q[i, j] = log_p[i, j] + max(Q[i - 1, j - 1], Q[i, j - 1])
-
-        # Backtrack
-        path = np.zeros(m_len, dtype=np.int64)
-        path[-1] = t_len - 1
-        for j in range(m_len - 2, -1, -1):
-            i = int(path[j + 1])
-            if i > 0 and Q[i - 1, j] > Q[i, j]:
-                path[j] = i - 1
-            else:
-                path[j] = i
-
-        # Convert path to durations
-        for j in range(m_len):
-            durations[b, path[j]] += 1
-
-    return durations
+    return torch.from_numpy(out_durations).to(attn_logits.device)
 
 
 def length_regulate(text_enc, durations, mel_lengths):
