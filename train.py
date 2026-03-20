@@ -6,7 +6,6 @@ import time
 import torch
 from pathlib import Path
 from dotenv import load_dotenv
-from tqdm import tqdm
 
 from accelerate import Accelerator, DistributedDataParallelKwargs
 from accelerate.utils import set_seed
@@ -192,8 +191,7 @@ def main():
     dur_loss_weight = train_cfg.flow.dur_loss_weight
     step_times = []
 
-    pbar = tqdm(total=total_steps, initial=global_step, desc="Training",
-                 disable=not is_main, unit="step", mininterval=30, maxinterval=60)
+    train_start_time = time.time()
 
     for epoch in range(start_epoch, tc.epochs):
         model.train()
@@ -212,7 +210,6 @@ def main():
                 if accelerator.sync_gradients:
                     grad_norm = accelerator.clip_grad_norm_(model.parameters(), tc.max_grad_norm)
                     global_step += 1
-                    pbar.update(1)
 
                 optimizer.step()
                 scheduler.step()
@@ -225,6 +222,10 @@ def main():
             if accelerator.sync_gradients and is_main and global_step % lc.log_every == 0:
                 progress_pct = global_step / total_steps * 100
                 avg_step_time = sum(step_times[-100:]) / len(step_times[-100:])
+                remaining_steps = total_steps - global_step
+                eta_seconds = remaining_steps * avg_step_time
+                eta_h = int(eta_seconds // 3600)
+                eta_m = int((eta_seconds % 3600) // 60)
                 phase = get_wsd_phase(global_step, total_steps,
                                       train_cfg.scheduler.warmup_ratio,
                                       train_cfg.scheduler.stable_ratio)
@@ -243,14 +244,11 @@ def main():
                 }
                 accelerator.log(log_dict, step=global_step)
 
-                pbar.set_postfix({
-                    "loss": f"{total_loss.item():.3f}",
-                    "flow": f"{flow_loss.item():.3f}",
-                    "dur": f"{dur_loss.item():.3f}",
-                    "lr": f"{scheduler.get_last_lr()[0]:.1e}",
-                    "phase": phase,
-                    "epoch": f"{epoch+1}/{tc.epochs}",
-                })
+                print(f"[{global_step}/{total_steps} ({progress_pct:.1f}%)] "
+                      f"loss={total_loss.item():.4f} flow={flow_loss.item():.4f} "
+                      f"dur={dur_loss.item():.4f} lr={scheduler.get_last_lr()[0]:.2e} "
+                      f"phase={phase} {1/avg_step_time:.1f} steps/s "
+                      f"epoch={epoch+1}/{tc.epochs} ETA={eta_h}h{eta_m}m")
 
             # Audio eval
             if accelerator.sync_gradients and is_main and global_step % lc.eval_every == 0 and global_step > 0:
@@ -312,8 +310,6 @@ def main():
 
         if is_main:
             print(f"\n--- Epoch {epoch + 1}/{tc.epochs} complete ---\n")
-
-    pbar.close()
 
     # Final save
     if is_main:
