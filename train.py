@@ -193,7 +193,7 @@ def main():
     step_times = []
 
     pbar = tqdm(total=total_steps, initial=global_step, desc="Training",
-                 disable=not is_main, unit="step")
+                 disable=not is_main, unit="step", mininterval=30, maxinterval=60)
 
     for epoch in range(start_epoch, tc.epochs):
         model.train()
