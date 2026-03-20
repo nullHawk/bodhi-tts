@@ -21,3 +21,5 @@ manifest.jsonl
 configs/model.yaml
 configs/train.yaml
 configs/data.yaml
+configs/data_phase*.yaml
+configs/train_phase*.yaml

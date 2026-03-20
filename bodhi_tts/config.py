@@ -84,6 +84,7 @@ class TrainingParams:
     bf16: bool = True
     num_workers: int = 10
     seed: int = 42
+    compile: bool = False
 
 
 @dataclass

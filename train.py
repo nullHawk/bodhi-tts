@@ -53,6 +53,7 @@ def main():
     set_seed(tc.seed)
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
+    torch.backends.cudnn.benchmark = True
 
     is_main = accelerator.is_main_process
 
@@ -84,6 +85,11 @@ def main():
     total_params, trainable_params = count_params(model)
     if is_main:
         print(f"Model params: {total_params / 1e6:.1f}M total, {trainable_params / 1e6:.1f}M trainable")
+
+    if tc.compile:
+        if is_main:
+            print("Compiling model with torch.compile...")
+        model = torch.compile(model)
 
     # Dataset
     dataset = BodhiDataset(
