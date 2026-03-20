@@ -7,7 +7,7 @@ import torch
 from pathlib import Path
 from dotenv import load_dotenv
 
-from accelerate import Accelerator
+from accelerate import Accelerator, DistributedDataParallelKwargs
 from accelerate.utils import set_seed
 
 from bodhi_tts.config import load_config
@@ -44,10 +44,13 @@ def main():
     lc = train_cfg.logging
 
     # Init accelerator
+    # mel_proj feeds MAS (under no_grad), so its params are unused in backward
+    ddp_kwargs = DistributedDataParallelKwargs(find_unused_parameters=True)
     accelerator = Accelerator(
         gradient_accumulation_steps=tc.grad_accum,
         mixed_precision="bf16" if tc.bf16 else "no",
         log_with="wandb" if lc.wandb_project else None,
+        kwargs_handlers=[ddp_kwargs],
     )
 
     set_seed(tc.seed)
