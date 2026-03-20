@@ -134,7 +134,7 @@ def main():
     )
 
     # Scheduler
-    steps_per_epoch = len(train_loader)
+    steps_per_epoch = len(train_loader) // tc.grad_accum
     total_steps = steps_per_epoch * tc.epochs
     scheduler = create_wsd_scheduler(
         optimizer, total_steps,
