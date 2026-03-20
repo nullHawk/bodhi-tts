@@ -1,0 +1,35 @@
+sources:
+  - name: gcs_source_1
+    type: gcs
+    metadata_path: "gs://your-bucket/path/to/metadata.jsonl"
+    text_field: source_text_latin
+    text_field_fallback: text
+    description_field: description
+
+  - name: gcs_source_2
+    type: gcs
+    metadata_path: "gs://your-bucket/another-path/metadata.jsonl"
+    text_field: source_text_latin
+    text_field_fallback: text
+    description_field: description
+
+  - name: hf_source
+    type: hf
+    dataset_id: "your-org/your-dataset"
+    split: train
+    text_field: text
+    description_field: description
+
+cache:
+  base_dir: /workspace/cache/bodhi-tts
+  audio_dir: /workspace/cache/bodhi-tts/audio
+  mel_dir: /workspace/cache/bodhi-tts/mel
+  desc_dir: /workspace/cache/bodhi-tts/desc_embeddings
+  manifest_path: /workspace/cache/bodhi-tts/manifest.jsonl
+  vocab_path: /workspace/cache/bodhi-tts/vocab.json
+
+filtering:
+  min_mel_frames: 20
+  max_mel_frames: 2000
+  max_text_len: 400
+  val_split: 0.02

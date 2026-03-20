@@ -1,0 +1,44 @@
+optimizer:
+  type: adamw_8bit
+  lr: 1.0e-4
+  betas: [0.9, 0.98]
+  weight_decay: 0.01
+
+scheduler:
+  type: wsd
+  warmup_ratio: 0.05
+  stable_ratio: 0.85
+  min_lr_ratio: 0.01
+
+training:
+  epochs: 200
+  batch_size: 32
+  grad_accum: 1
+  max_grad_norm: 1.0
+  bf16: true
+  num_workers: 10
+  seed: 42
+
+checkpointing:
+  percentages: [5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 95]
+  output_dir: /workspace/checkpoints/bodhi-tts
+  persist_dir: /workspace/persist/bodhi-tts
+  gcs_bucket: null
+
+logging:
+  log_every: 10
+  eval_every: 500
+  wandb_project: bodhi-tts
+  wandb_run_name: null
+
+eval_prompts:
+  - text: "hello, how are you?"
+    description: "A warm, friendly female voice speaking casually"
+  - text: "the weather is very nice today"
+    description: "A cheerful young male voice with moderate energy"
+  - text: "please give me a coffee"
+    description: "A polite, calm female voice in a quiet setting"
+
+flow:
+  n_inference_steps: 10
+  dur_loss_weight: 0.1

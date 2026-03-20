@@ -1,0 +1,38 @@
+vocab_size: null  # set dynamically after scanning dataset
+
+char_embed_dim: 256
+
+text_encoder:
+  d_model: 256
+  n_heads: 4
+  n_layers: 6
+  d_ff: 2048
+  dropout: 0.1
+  max_seq_len: 512
+
+description_encoder:
+  minilm_model: "sentence-transformers/all-MiniLM-L6-v2"
+  minilm_dim: 384
+  proj_dim: 256
+  freeze: true
+
+duration_predictor:
+  hidden_dim: 256
+  n_layers: 2
+  kernel_size: 3
+  dropout: 0.5
+
+decoder:
+  in_channels: 80
+  d_model: 256
+  channels_mult: [1, 2, 4]
+  n_res_blocks: 2
+  n_heads: 4
+
+mel:
+  sr: 24000
+  n_fft: 1024
+  hop_length: 256
+  n_mels: 80
+  f_min: 0
+  f_max: 12000
