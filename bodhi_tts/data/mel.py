@@ -1,5 +1,7 @@
 import torch
 import torchaudio
+import soundfile as sf
+import numpy as np
 from pathlib import Path
 
 
@@ -44,7 +46,8 @@ class MelProcessor:
             mel = torch.load(cache_path, weights_only=True)
             return mel, str(cache_path)
 
-        waveform, sr = torchaudio.load(audio_path)
+        audio_np, sr = sf.read(audio_path, dtype="float32")
+        waveform = torch.from_numpy(audio_np).float()
         mel = self.compute(waveform, sr)
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         torch.save(mel, cache_path)
